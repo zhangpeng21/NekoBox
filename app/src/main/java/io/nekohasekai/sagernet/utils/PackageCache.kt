@@ -1,0 +1,104 @@
+package io.nekohasekai.sagernet.utils
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import io.nekohasekai.sagernet.ktx.app
+import io.nekohasekai.sagernet.ktx.listenForPackageChanges
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import moe.matsuri.nb4a.plugin.Plugins
+import java.util.concurrent.atomic.AtomicBoolean
+
+object PackageCache {
+
+    lateinit var installedPackages: Map<String, PackageInfo>
+    lateinit var installedPluginPackages: Map<String, PackageInfo>
+    lateinit var installedApps: Map<String, ApplicationInfo>
+    lateinit var packageMap: Map<String, Int>
+    val uidMap = HashMap<Int, HashSet<String>>()
+    val loaded = Mutex(true)
+    var registerd = AtomicBoolean(false)
+
+    // called from init (suspend)
+    fun register() {
+        if (registerd.getAndSet(true)) return
+        reload()
+        app.listenForPackageChanges(false) {
+            reload()
+            labelMap.clear()
+        }
+        loaded.unlock()
+    }
+
+    @SuppressLint("InlinedApi")
+    fun reload() {
+        // Opt: removed GET_PROVIDERS and GET_META_DATA - those flags cause PackageManager to
+        // deserialize provider descriptors and metadata bundles for every installed package,
+        // adding tens of milliseconds on devices with many apps. We only need permissions info.
+        val rawPackageInfo = app.packageManager.getInstalledPackages(
+            PackageManager.MATCH_UNINSTALLED_PACKAGES
+                    or PackageManager.GET_PERMISSIONS
+        )
+
+        installedPackages = rawPackageInfo.filter {
+            when (it.packageName) {
+                "android" -> true
+                else -> it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
+            }
+        }.associateBy { it.packageName }
+
+        installedPluginPackages = rawPackageInfo.filter {
+            Plugins.isExe(it)
+        }.associateBy { it.packageName }
+
+        // Opt: GET_META_DATA is not needed here; loadLabel() works without metadata bundles
+        val installed = app.packageManager.getInstalledApplications(0)
+        installedApps = installed.associateBy { it.packageName }
+        packageMap = installed.associate { it.packageName to it.uid }
+        uidMap.clear()
+        for (info in installed) {
+            val uid = info.uid
+            uidMap.getOrPut(uid) { HashSet() }.add(info.packageName)
+        }
+    }
+
+    /** Clears the label map under memory pressure; rebuilt lazily on next access. */
+    fun clearLabelCache() {
+        labelMap.clear()
+    }
+
+    operator fun get(uid: Int) = uidMap[uid]
+    operator fun get(packageName: String) = packageMap[packageName]
+
+    fun awaitLoadSync() {
+        if (::packageMap.isInitialized) {
+            return
+        }
+        if (!registerd.get()) {
+            register()
+            return
+        }
+        runBlocking {
+            loaded.withLock {
+                // just await
+            }
+        }
+    }
+
+    // Opt: ConcurrentHashMap avoids synchronized{} on every label lookup and is safe for
+    // concurrent reads from multiple UI threads.
+    private val labelMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    fun loadLabel(packageName: String): String {
+        var label = labelMap[packageName]
+        if (label != null) return label
+        val info = installedApps[packageName] ?: return packageName
+        label = info.loadLabel(app.packageManager).toString()
+        labelMap[packageName] = label
+        return label
+    }
+
+}
