@@ -31,6 +31,21 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Install gomobile-matsuri
+        run: |
+          go install github.com/matsuridayo/gomobile-matsuri/cmd/gomobile-matsuri@latest
+          go install github.com/matsuridayo/gomobile-matsuri/cmd/gobind-matsuri@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Init gomobile
+        run: gomobile-matsuri init
+
+      - name: Build libcore
+        run: |
+          cd libcore
+          chmod +x build.sh
+          ./build.sh
+
       - name: Build with Gradle
         run: ./gradlew assembleRelease
 
