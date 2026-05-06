@@ -60,7 +60,7 @@ public class KryoConverters {
         baos.reset();
         ByteBufferOutput buffer = tlOutput.get();
         buffer.setOutputStream(baos);  // re-attach after reset
-        buffer.clear();
+        buffer.reset();
         bean.serializeToBuffer(buffer);
         buffer.flush();
         return baos.toByteArray();
