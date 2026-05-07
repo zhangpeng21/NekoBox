@@ -64,6 +64,8 @@ jobs:
           alias: nekobox
           keyStorePassword: nekobox123
           keyPassword: nekobox123
+        env:
+          BUILD_TOOLS_VERSION: "35.0.1"
 
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
