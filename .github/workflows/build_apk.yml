@@ -53,7 +53,7 @@ jobs:
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           echo "ndk.dir=${ANDROID_HOME}/ndk/25.0.8775105" >> local.properties
           ./run init action gradle
-          ./gradlew app:assemblePreviewRelease
+          ./gradlew app:assemblePreviewRelease app:assembleOssRelease
 
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
@@ -67,8 +67,22 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "35.0.1"
 
+      - name: Sign OSS APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_oss
+        with:
+          releaseDirectory: app/build/outputs/apk/oss/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: nekobox
+          keyStorePassword: nekobox123
+          keyPassword: nekobox123
+        env:
+          BUILD_TOOLS_VERSION: "35.0.1"
+
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: NekoBox-Signed-APK
-          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          name: NekoBox-Signed-APKs
+          path: |
+            app/build/outputs/apk/preview/release/*.apk
+            app/build/outputs/apk/oss/release/*.apk
