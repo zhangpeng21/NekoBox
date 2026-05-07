@@ -1,4 +1,5 @@
 name: Build APK
+
 on:
   push:
     branches:
@@ -12,10 +13,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Install Golang
         uses: actions/setup-go@v5
         with:
           go-version: ^1.25
+
       - name: Native Build
         run: ./run lib core
 
@@ -32,12 +35,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-      
+
       - name: Download LibCore Artifact
         uses: actions/download-artifact@v4
         with:
@@ -50,9 +54,19 @@ jobs:
           echo "ndk.dir=${ANDROID_HOME}/ndk/25.0.8775105" >> local.properties
           ./run init action gradle
           ./gradlew app:assemblePreviewRelease
-          
-      - name: Upload APK
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: app/build/outputs/apk/preview/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: nekobox
+          keyStorePassword: nekobox123
+          keyPassword: nekobox123
+
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: NekoBox-APK
-          path: app/build/outputs/apk/preview/release/*.apk
+          name: NekoBox-Signed-APK
+          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
